@@ -56,7 +56,8 @@ class PayloadGenerator:
             variantes.add(payload.replace("script", "sCrIpt").replace("SCRIPT", "sCrIpt"))
             
             # Anidamiento para bypass de borrado de etiqueta y combinado con mayúsculas/minúsculas
-            variantes.update({payload.replace("<script>", "<scr<script>ipt>").replace("</script>", "</scr</script>ipt>"), payload.replace("<script>", "<scr<sCrIpt>ipt>").replace("</script>", "</scr</sCrIpt>ipt>")})
+            variantes.update({payload.replace("<script>", "<scr<script>ipt>").replace("</script>", "</scr</script>ipt>"), 
+                              payload.replace("<script>", "<scr<sCrIpt>ipt>").replace("</script>", "</scr</sCrIpt>ipt>")})
 
         if "alert" in filtros_str:
             variantes.discard(payload)

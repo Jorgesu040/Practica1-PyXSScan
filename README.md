@@ -1,29 +1,12 @@
 # Practica1-PyXSScan
 
-Herramienta en Python para automatizar la identificación de vectores XSS, con enfoque en descubrimiento de entradas, verificación, análisis de contexto, detección de filtros y generación de payloads con evasión.
+Escáner XSS en Python para Hacking Ético en U-tad. Detecta parámetros GET/POST y PATH, analiza el contexto de reflexión, prueba filtros y genera payloads e informes Markdown.
 
-Diseñada con fines educativos y para mi asignatura de Hacking ético, permite a los usuarios verificar la seguridad de parámetros GET/POST y PATH en aplicaciones web y, en caso de detectar reflexión/persistencia, crear payloads XSS.
-
-El proyecto esta testeado en Web for Pentesters (primeros niveles)
-
-## Objetivo
-
-Este proyecto implementa un escáner modular para:
-
-1. Descubrir entradas inyectables (GET, POST y PATH).
-2. Verificar reflexión (Reflected XSS).
-3. Verificar persistencia (Stored XSS).
-4. Analizar el contexto HTML/JS de reflexión.
-5. Detectar filtros (bloqueo o codificación).
-6. Aplicar técnicas de evasión.
-7. Generar payloads por contexto.
-8. Presentar resultados en consola y en reporte Markdown.
+[Informe de ejemplo](reportes_ejemplo/reporte_xss_ej4.md)
 
 ## Arquitectura
 
-El proyecto está modularizado aplicando responsabilidad única:
-
-- `main.py`: Orquestador del flujo completo de escaneo.
+- `main.py`: Flujo de escaneo.
 - `modelos.py`: Modelos de dominio (`PuntoInyeccion`) y enums (`TipoXSS`, `Contexto`).
 - `http_requester.py`: Capa de red, crawling de formularios/inputs, envío de payloads y detección de filtros.
 - `context_analyzer.py`: Análisis de contexto en DOM con BeautifulSoup.
