@@ -96,7 +96,9 @@ def main():
     """Main entry point of the application."""
     parser = argparse.ArgumentParser(description="PyXSScan - Escáner automatizado de inyección XSS")
     parser.add_argument("-u", "--url", type=str, help="URL objetivo a escanear (junto con http/https)")
-    parser.add_argument("-c", "--canary", type=str, default="p3nt35ting", help="Modificar la cadena 'canary' o testigo para inyecciones (default: p3nt35ting)")
+    parser.add_argument("-c", "--canary", type=str, 
+                        default="p3nt35ting", 
+                        help="Modificar la cadena 'canary' o testigo para inyecciones (default: p3nt35ting)")
     
     args = parser.parse_args()
 
