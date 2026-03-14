@@ -239,7 +239,7 @@ class XSSScanner:
 
             if canary not in response.text:
                 print(f"[-] Filtro detectado en {punto_inyeccion.metodo}: {punto_inyeccion.parametro} - Caracter/Palabra bloqueada: '{filter}'")
-                punto_inyeccion.filtros.append(filter)
+                punto_inyeccion.filtros_detectados.append(filter)
 
         pass
 
@@ -343,7 +343,7 @@ class XSSScanner:
             payloads_finales = set()
             
             for pb in payloads_base:
-                variantes_evasion = self.aplicar_evasion(pb, punto.filtros)
+                variantes_evasion = self.aplicar_evasion(pb, punto.filtros_detectados)
                 payloads_finales.update(variantes_evasion)
             
             print(f"[*] Se han generado {len(payloads_finales)} posibles payloads para el parámetro '{punto.parametro}':")
