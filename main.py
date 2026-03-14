@@ -31,6 +31,8 @@ from http_requester import HttpRequester
 from modelos import PuntoInyeccion, TipoXSS
 from payload_generator import PayloadGenerator
 from reporter import ConsoleReporter
+import argparse
+
 
 
 
@@ -92,9 +94,17 @@ class XSSScanner:
 
 def main():
     """Main entry point of the application."""
-    url = input("Ingrese la URL a escanear: ")
+    parser = argparse.ArgumentParser(description="PyXSScan - Escáner automatizado de inyección XSS")
+    parser.add_argument("-u", "--url", type=str, help="URL objetivo a escanear (junto con http/https)")
+    parser.add_argument("-c", "--canary", type=str, default="p3nt35ting", help="Modificar la cadena 'canary' o testigo para inyecciones (default: p3nt35ting)")
+    
+    args = parser.parse_args()
 
-    scanner = XSSScanner(url)
+    url = args.url
+    if not url:
+        url = input("Ingrese la URL a escanear: ")
+
+    scanner = XSSScanner(url, canary=args.canary)
     scanner.ejecutar()
 
 if __name__ == "__main__":
