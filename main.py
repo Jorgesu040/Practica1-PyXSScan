@@ -33,6 +33,10 @@ from payloads import payloads
 from bs4 import BeautifulSoup, Comment, NavigableString
 from urllib.parse import urlparse, parse_qs, parse_qsl
 
+from dataclasses import dataclass, field
+
+
+
 # Definición de un Enum
 class TipoXSS(Enum):
     REFLECTED = 0
@@ -48,6 +52,15 @@ class Contexto(Enum):
     PLAIN_TEXT = 5
     # Hacer que lance excepcion para ver porque ocurre    
     OTHER = 6
+
+
+@dataclass
+class PuntoInyeccion:
+    metodo: str  # GET, POST, PATH
+    parametro: str
+    tipo_xss: TipoXSS = TipoXSS.NONE
+    contexto: Contexto = Contexto.OTHER
+    filtros_detectados: list[str] = field(default_factory=list)
 
 class XSSScanner:
 
@@ -72,7 +85,7 @@ class XSSScanner:
         
     # Metodo auxiliar para borrar los puntos de inyección detectados como NONE
     def _limpiar_puntos_none(self):
-        self.puntos_inyeccion = [p for p in self.puntos_inyeccion if p[2] != TipoXSS.NONE]
+        self.puntos_inyeccion = [p for p in self.puntos_inyeccion if p.tipo_xss != TipoXSS.NONE]
 
     def _url_con_path_inyectado(self, payload):
         return self.url._replace(path=f"{self.url.path.rstrip('/')}/{payload}").geturl()
@@ -82,10 +95,10 @@ class XSSScanner:
         # Descubrir parámetros GET
         query_params = parse_qs(self.url.query)
         for param in query_params:
-            self.puntos_inyeccion.append(['GET', param, None, None, []])
+            self.puntos_inyeccion.append(PuntoInyeccion(metodo='GET', parametro=param))
 
         # Punto de inyección en la ruta (path injection)
-        self.puntos_inyeccion.append(['PATH', self.url.path or '/', None, None, []])
+        self.puntos_inyeccion.append(PuntoInyeccion(metodo='PATH', parametro=self.url.path or '/'))
 
         # Lógica con BeautifulSoup para llenar self.puntos_inyeccion
         response = self.session.get(self.url.geturl())
@@ -102,53 +115,53 @@ class XSSScanner:
                     continue
                 name = input_tag.get('name')
                 if name:
-                    self.puntos_inyeccion.append([method, name, None, None, []])
+                    self.puntos_inyeccion.append(PuntoInyeccion(metodo=method, parametro=name))
         
 
     def verificar_reflexion(self, punto_inyeccion):
         # Enviar un canary único y verificar si se refleja en la respuesta
         canary = self.default_canary
-        if punto_inyeccion[0] == 'GET':
-            params = {punto_inyeccion[1]: canary}
+        if punto_inyeccion.metodo == 'GET':
+            params = {punto_inyeccion.parametro: canary}
             response = self.session.get(self.url.geturl(), params=params)
-        elif punto_inyeccion[0] == 'POST':
-            data = {punto_inyeccion[1]: canary}
+        elif punto_inyeccion.metodo == 'POST':
+            data = {punto_inyeccion.parametro: canary}
             response = self.session.post(self.url.geturl(), data=data)
-        elif punto_inyeccion[0] == 'PATH':
+        elif punto_inyeccion.metodo == 'PATH':
             response = self.session.get(self._url_con_path_inyectado(canary))
         
         count = response.text.count(canary)
         
         if  count > 0:
-            print(f"[*] Reflexión detectada en {punto_inyeccion[0]}: {punto_inyeccion[1]} ({count} veces)")
-            punto_inyeccion[2] = TipoXSS.REFLECTED
+            print(f"[*] Reflexión detectada en {punto_inyeccion.metodo}: {punto_inyeccion.parametro} ({count} veces)")
+            punto_inyeccion.tipo_xss = TipoXSS.REFLECTED
             return True
-        elif punto_inyeccion[2] != TipoXSS.STORED:
-            print(f"[-] No se detectó reflexión en {punto_inyeccion[0]}: {punto_inyeccion[1]}")
-            punto_inyeccion[2] = TipoXSS.NONE
+        elif punto_inyeccion.tipo_xss != TipoXSS.STORED:
+            print(f"[-] No se detectó reflexión en {punto_inyeccion.metodo}: {punto_inyeccion.parametro}")
+            punto_inyeccion.tipo_xss = TipoXSS.NONE
             
         return False
         
     def verificar_persistencia(self, punto_inyeccion):
         # Enviar un canary único y verificar si se refleja en la respuesta
         canary = self.default_canary + 'per'
-        if punto_inyeccion[0] == 'GET':
-            params = {punto_inyeccion[1]: canary}
+        if punto_inyeccion.metodo == 'GET':
+            params = {punto_inyeccion.parametro: canary}
             self.session.get(self.url.geturl(), params=params)
-        elif punto_inyeccion[0] == 'POST':
-            data = {punto_inyeccion[1]: canary}
+        elif punto_inyeccion.metodo == 'POST':
+            data = {punto_inyeccion.parametro: canary}
             self.session.post(self.url.geturl(), data=data)
-        elif punto_inyeccion[0] == 'PATH':
+        elif punto_inyeccion.metodo == 'PATH':
             self.session.get(self._url_con_path_inyectado(canary))
         
         count = self.session.get(self.url.geturl()).text.count(canary)
         
         if count > 0:
-            print(f"[*] Persistencia detectada en {punto_inyeccion[0]}: {punto_inyeccion[1]} ({count} veces)")
-            punto_inyeccion[2] = TipoXSS.STORED
+            print(f"[*] Persistencia detectada en {punto_inyeccion.metodo}: {punto_inyeccion.parametro} ({count} veces)")
+            punto_inyeccion.tipo_xss = TipoXSS.STORED
             return True
-        elif punto_inyeccion[2] != TipoXSS.REFLECTED:
-            punto_inyeccion[2] = TipoXSS.NONE
+        elif punto_inyeccion.tipo_xss != TipoXSS.REFLECTED:
+            punto_inyeccion.tipo_xss = TipoXSS.NONE
         
         return False
         
@@ -157,13 +170,13 @@ class XSSScanner:
         # Lógica para ver si el canary está dentro de <script>, value='', texto plano o comentarios HTML
         
         # 1 - Buscar el canary en la respuesta
-        if punto_inyeccion[0] == 'GET':
-            params = {punto_inyeccion[1]: canary}
+        if punto_inyeccion.metodo == 'GET':
+            params = {punto_inyeccion.parametro: canary}
             response = self.session.get(self.url.geturl(), params=params)
-        elif punto_inyeccion[0] == 'POST':
-            data = {punto_inyeccion[1]: canary}
+        elif punto_inyeccion.metodo == 'POST':
+            data = {punto_inyeccion.parametro: canary}
             response = self.session.post(self.url.geturl(), data=data)
-        elif punto_inyeccion[0] == 'PATH':
+        elif punto_inyeccion.metodo == 'PATH':
             response = self.session.get(self._url_con_path_inyectado(canary))
 
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -175,8 +188,8 @@ class XSSScanner:
             string=lambda text: isinstance(text, Comment) and canary in text
         )
         if len(comment_finds) > 0:
-            print(f"[*] El punto de inyeccion {punto_inyeccion[0]} se encuentra en un comentario)")
-            punto_inyeccion[3] = Contexto.COMENTARIO
+            print(f"[*] El punto de inyeccion {punto_inyeccion.metodo} se encuentra en un comentario)")
+            punto_inyeccion.contexto = Contexto.COMENTARIO
         
         # Caso 2: NavigableString (script o texto plano)
         non_comment_types = soup.find_all(
@@ -189,23 +202,23 @@ class XSSScanner:
             if script_tags:
                 script_content = str(script_tags[0])
                 if f"'{canary}'" in script_content or f"'{canary}" in script_content or f"{canary}'" in script_content:
-                    punto_inyeccion[3] = Contexto.SCRIPT_SINGLE_QUOTE
+                    punto_inyeccion.contexto = Contexto.SCRIPT_SINGLE_QUOTE
                 elif f'"{canary}"' in script_content or f'"{canary}' in script_content or f'{canary}"' in script_content:
-                    punto_inyeccion[3] = Contexto.SCRIPT_DOUBLE_QUOTE
+                    punto_inyeccion.contexto = Contexto.SCRIPT_DOUBLE_QUOTE
                 else:
-                    punto_inyeccion[3] = Contexto.SCRIPT_NONE_QUOTE
+                    punto_inyeccion.contexto = Contexto.SCRIPT_NONE_QUOTE
             # Caso 2.2: Texto plano
             else:
-                punto_inyeccion[3] = Contexto.PLAIN_TEXT
+                punto_inyeccion.contexto = Contexto.PLAIN_TEXT
 
         # Caso 3: Atributo HTML
         if any(canary in str(v) for tag in soup.find_all(True) for v in tag.attrs.values()):
-            punto_inyeccion[3] = Contexto.ATTRIBUTE
+            punto_inyeccion.contexto = Contexto.ATTRIBUTE
 
 
-        if punto_inyeccion[3] is None:
-            print(f"[*] No se pudo determinar el contexto del punto de inyección {punto_inyeccion[0]}: {punto_inyeccion[1]}")
-            punto_inyeccion[3] = Contexto.OTHER
+        if punto_inyeccion.contexto is None:
+            print(f"[*] No se pudo determinar el contexto del punto de inyección {punto_inyeccion.metodo}: {punto_inyeccion.parametro}")
+            punto_inyeccion.contexto = Contexto.OTHER
 
         pass
 
@@ -215,18 +228,18 @@ class XSSScanner:
         # Lógica para detectar caracteres bloqueados o palabras prohibidas
         for filter in filters:
             canary = self.default_canary + filter
-            if punto_inyeccion[0] == 'GET':
-                params = {punto_inyeccion[1]: canary}
+            if punto_inyeccion.metodo == 'GET':
+                params = {punto_inyeccion.parametro: canary}
                 response = self.session.get(self.url.geturl(), params=params)
-            elif punto_inyeccion[0] == 'POST':
-                data = {punto_inyeccion[1]: canary}
+            elif punto_inyeccion.metodo == 'POST':
+                data = {punto_inyeccion.parametro   : canary}
                 response = self.session.post(self.url.geturl(), data=data)
-            elif punto_inyeccion[0] == 'PATH':
+            elif punto_inyeccion.metodo == 'PATH':
                 response = self.session.get(self._url_con_path_inyectado(canary))
 
             if canary not in response.text:
-                print(f"[-] Filtro detectado en {punto_inyeccion[0]}: {punto_inyeccion[1]} - Caracter/Palabra bloqueada: '{filter}'")
-                punto_inyeccion[4].append(filter)
+                print(f"[-] Filtro detectado en {punto_inyeccion.metodo}: {punto_inyeccion.parametro} - Caracter/Palabra bloqueada: '{filter}'")
+                punto_inyeccion.filtros.append(filter)
 
         pass
 
@@ -308,7 +321,7 @@ class XSSScanner:
         
         print("[*] Puntos de inyección encontrados:")
         for punto in self.puntos_inyeccion:
-            print(f" - {punto[0]}: {punto[1]}")
+            print(f" - {punto.metodo}: {punto.parametro}")
             self.verificar_reflexion(punto)
             self.verificar_persistencia(punto)
 
@@ -318,24 +331,24 @@ class XSSScanner:
             self.analizar_contexto(punto)
             self.detectar_filtros(punto)
         
-            tipo_xss_str = punto[2].name if punto[2] else 'NONE'
-            contexto_str = punto[3].name if len(punto) > 3 and punto[3] else 'NONE'
+            tipo_xss_str = punto.tipo_xss.name if punto.tipo_xss else 'NONE'
+            contexto_str = punto.contexto.name if punto.contexto else 'NONE'
             
             print(f"[*] Generando payloads para:")
-            print(f"    - Punto de inyección: ({punto[0]}) {punto[1]}")
+            print(f"    - Punto de inyección: ({punto.metodo}) {punto.parametro}")
             print(f"    - Tipo de XSS: {tipo_xss_str}")
             print(f"    - Contexto evaluado: {contexto_str}")
             
-            payloads_base = self.generar_payloads_base(punto[3])
+            payloads_base = self.generar_payloads_base(punto.contexto)
             payloads_finales = set()
             
             for pb in payloads_base:
-                variantes_evasion = self.aplicar_evasion(pb, punto[4])
+                variantes_evasion = self.aplicar_evasion(pb, punto.filtros)
                 payloads_finales.update(variantes_evasion)
             
-            print(f"[*] Se han generado {len(payloads_finales)} posibles payloads para el parámetro '{punto[1]}':")
+            print(f"[*] Se han generado {len(payloads_finales)} posibles payloads para el parámetro '{punto.parametro}':")
             for p in payloads_finales:
-                print(f"    [{punto[0]} - {punto[1]}] -> {p}")
+                print(f"    [{punto.metodo} - {punto.parametro}] -> {p}")
             print("-" * 50)
 
 def main():
